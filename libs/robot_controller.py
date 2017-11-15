@@ -37,6 +37,17 @@ class Snatch3r(object):
         self.touch_sensor = ev3.TouchSensor()
         assert self.touch_sensor
 
+        self.ir_sensor = ev3.InfraredSensor()
+        assert self.ir_sensor
+
+        self.color_sensor = ev3.ColorSensor()
+        assert self.color_sensor
+
+        self.pixy = ev3.Sensor(driver_name="pixy-lego")
+        assert self.pixy
+
+        self.running = True
+
 
     # TODO: Implement the Snatch3r class as needed when working the sandox exercises
     def drive_inches(self, length, speed):
@@ -104,3 +115,71 @@ class Snatch3r(object):
         print('Goodbye')
         ev3.Sound.speak('Goodbye')
 
+    def loop_forever(self):
+        self.running = True
+        while self.running:
+            #   "Self Defense" mode developed by Shengbo Zou
+            if self.ir_sensor.proximity < 10:
+                self.pinch()
+                ev3.Sound.speak("Don't touch me. Now back off").wait()
+                time.sleep(1.5)
+                self.release()
+            time.sleep(0.1)
+
+    def shut_down(self):
+        self.running = False
+
+    def constant_moving(self, l_speed, r_speed):
+        self.left_motor.run_forever(speed_sp=l_speed)
+        self.right_motor.run_forever(speed_sp=r_speed)
+
+    def stop(self):
+        self.left_motor.stop(stop_action=ev3.Motor.STOP_ACTION_BRAKE)
+        self.right_motor.stop(stop_action=ev3.Motor.STOP_ACTION_BRAKE)
+
+    def seek_beacon(self):
+        seeker = ev3.BeaconSeeker(sensor=self.ir_sensor, channel=1)
+        forward_speed = 300
+        turn_speed = 100
+
+        while not self.touch_sensor.is_pressed:
+            current_heading = seeker.heading
+            current_distance = seeker.distance
+            if current_distance == -128:
+                # If the IR Remote is not found just sit idle for this program until it is moved.
+                print("IR Remote not found. Distance is -128")
+                self.stop()
+            else:
+                if math.fabs(current_heading) < 2:
+                    # Close enough of a heading to move forward
+                    print("On the right heading. Distance: ", current_distance)
+                    if current_distance <= 1:
+                        time.sleep(1)
+                        self.stop()
+                        return True
+                    if current_distance > 0:
+                        self.constant_moving(forward_speed, forward_speed)
+                elif current_heading < 0:
+                    self.constant_moving(-turn_speed, turn_speed)
+                elif current_heading > 0:
+                    self.constant_moving(turn_speed, -turn_speed)
+                else:
+                    print("Heading too far off")
+            time.sleep(0.2)
+        print("Abandon ship!")
+        self.stop()
+        return False
+
+    def pinch(self):
+        self.arm_motor.run_forever(speed_sp=900)
+        time.sleep(1.5)
+        self.arm_motor.stop(stop_action=ev3.Motor.STOP_ACTION_BRAKE)
+
+    def release(self):
+        self.arm_motor.run_forever(speed_sp=-900)
+        time.sleep(1.5)
+        self.arm_motor.stop(stop_action=ev3.Motor.STOP_ACTION_BRAKE)
+
+    def free_moving(self, l_speed, r_speed):
+        self.left_motor.run_forever(speed_sp=l_speed)
+        self.right_motor.run_forever(speed_sp=r_speed)
